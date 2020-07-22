@@ -7,11 +7,13 @@ import time
 import argparse
 import logging
 import os
+from collections import OrderedDict
 from pathlib import Path
 
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler(sys.stdout))
+log.setLevel(logging.INFO)
 
 CMD_ID_EXIT = 0
 CMD_ID_LIST = 1
@@ -51,20 +53,21 @@ class UsbContext:
     def read(self, data_size, timeout=0):
         return self._in.read(data_size, timeout=timeout)
 
-    def write(self, data):
-        self._out.write(data)
+    def write(self, data, timeout=0):
+        self._out.write(data, timeout=timeout)
 
 
-def process_file_range_command(data_size, context):
+def process_file_range_command(data_size, context, cache=None):
     log.info('File range')
     context.write(struct.pack('<4sIII', b'DBI0', CMD_TYPE_ACK, CMD_ID_FILE_RANGE, data_size))
-
     file_range_header = context.read(data_size)
-
     range_size = struct.unpack('<I', file_range_header[:4])[0]
     range_offset = struct.unpack('<Q', file_range_header[4:12])[0]
     nsp_name_len = struct.unpack('<I', file_range_header[12:16])[0]
     nsp_name = bytes(file_range_header[16:]).decode('utf-8')
+    if cache is not None and len(cache) > 0:
+        if nsp_name in cache:
+            nsp_name = cache[nsp_name]
 
     log.info(f'Range Size: {range_size}, Range Offset: {range_offset}, Name len: {nsp_name_len}, Name: {nsp_name}')
 
@@ -96,6 +99,8 @@ def process_file_range_command(data_size, context):
 
 def poll_commands(context, work_dir_path):
     log.info('Entering command loop')
+
+    cmd_cache = None
     while True:
         cmd_header = bytes(context.read(16, timeout=0))
         magic = cmd_header[:4]
@@ -111,10 +116,10 @@ def poll_commands(context, work_dir_path):
 
         if cmd_id == CMD_ID_EXIT:
             process_exit_command(context)
-        elif cmd_id == CMD_ID_FILE_RANGE:
-            process_file_range_command(context, data_size)
         elif cmd_id == CMD_ID_LIST:
-            process_list_command(context, work_dir_path)
+            cmd_cache = process_list_command(context, work_dir_path)
+        elif cmd_id == CMD_ID_FILE_RANGE:
+            process_file_range_command(data_size, context=context, cache=cmd_cache)
 
 
 def process_exit_command(context):
@@ -125,14 +130,18 @@ def process_exit_command(context):
 
 def process_list_command(context, work_dir_path):
     log.info('Get list')
-    nsp_path_list = ""
 
+    cached_titles = OrderedDict()
     for dirName, subdirList, fileList in os.walk(work_dir_path):
         log.debug(f'Found directory: {dirName}')
         for filename in fileList:
-            log.debug(f'\t{filename}')
-            nsp_path_list += str(Path(dirName).joinpath(filename)) + '\n'
-        
+            if filename.lower().endswith('.nsp') or filename.lower().endswith('nsz'):
+                log.debug(f'\t{filename}')
+                cached_titles[f'{filename}'] = str(Path(dirName).joinpath(filename))
+
+    nsp_path_list = ''
+    for title in cached_titles.keys():
+        nsp_path_list += f'{title}\n'
     nsp_path_list_bytes = nsp_path_list.encode('utf-8')
     nsp_path_list_len = len(nsp_path_list_bytes)
 
@@ -146,6 +155,7 @@ def process_list_command(context, work_dir_path):
     log.debug('Ack')
 
     context.write(nsp_path_list_bytes)
+    return cached_titles
 
 
 def connect_to_switch():
@@ -163,10 +173,10 @@ def get_args(args):
     parser = argparse.ArgumentParser(
         prog='dbibackend',
         description='Install local titles into Nintendo switch via USB',
-        add_help=False
+        add_help=True
     )
     parent_group = parser.add_argument_group(title='Command line params')
-    parent_group.add_argument('--titles', '-t', default='.', type=str, required=False)
+    parent_group.add_argument('titles', type=str, help='Path to titles dir')
     parent_group.add_argument('--debug', action='store_true', default=False, required=False,
                               help='Enable debug output')
     return parser.parse_args(args)
@@ -179,7 +189,7 @@ def main():
         log.setLevel(logging.DEBUG)
 
     if not Path(args.titles).is_dir():
-        raise ValueError('Argument must be a directory')
+        raise NotADirectoryError('Specified path must be a directory')
 
     poll_commands(
         connect_to_switch(),
