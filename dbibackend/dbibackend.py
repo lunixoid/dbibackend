@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 log = logging.getLogger(__name__)
+log.addHandler(logging.StreamHandler(sys.stdout))
 
 CMD_ID_EXIT = 0
 CMD_ID_LIST = 1
@@ -73,7 +74,7 @@ def process_file_range_command(data_size, context):
     cmd_type = struct.unpack('<I', ack[4:8])[0]
     cmd_id = struct.unpack('<I', ack[8:12])[0]
     data_size = struct.unpack('<I', ack[12:16])[0]
-    log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}', flush=True)
+    log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
     log.debug('Ack')
 
     with open(nsp_name, 'rb') as f:
@@ -105,7 +106,7 @@ def poll_commands(context, work_dir_path):
         cmd_id = struct.unpack('<I', cmd_header[8:12])[0]
         data_size = struct.unpack('<I', cmd_header[12:16])[0]
 
-        log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}', flush=True)
+        log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
 
         if cmd_id == CMD_ID_EXIT:
             process_exit_command(context)
@@ -128,6 +129,8 @@ def process_list_command(context, work_dir_path):
 
     for nsp_path in [f for f in nsp_dir.iterdir() if f.is_file()]:
         nsp_path_list += nsp_path.__str__() + '\n'
+
+    log.debug(nsp_path_list)
         
     nsp_path_list_bytes = nsp_path_list.encode('utf-8')
     nsp_path_list_len = len(nsp_path_list_bytes)
@@ -138,7 +141,7 @@ def process_list_command(context, work_dir_path):
     cmd_type = struct.unpack('<I', ack[4:8])[0]
     cmd_id = struct.unpack('<I', ack[8:12])[0]
     data_size = struct.unpack('<I', ack[12:16])[0]
-    log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}', flush=True)
+    log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
     log.debug('Ack')
 
     context.write(nsp_path_list_bytes)
