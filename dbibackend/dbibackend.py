@@ -6,6 +6,7 @@ import sys
 import time
 import argparse
 import logging
+import os
 from pathlib import Path
 
 
@@ -125,12 +126,12 @@ def process_exit_command(context):
 def process_list_command(context, work_dir_path):
     log.info('Get list')
     nsp_path_list = ""
-    nsp_dir = Path(work_dir_path)
 
-    for nsp_path in [f for f in nsp_dir.iterdir() if f.is_file()]:
-        nsp_path_list += nsp_path.__str__() + '\n'
-
-    log.debug(nsp_path_list)
+    for dirName, subdirList, fileList in os.walk(work_dir_path):
+        log.debug(f'Found directory: {dirName}')
+        for filename in fileList:
+            log.debug(f'\t{filename}')
+            nsp_path_list += str(Path(dirName).joinpath(filename)) + '\n'
         
     nsp_path_list_bytes = nsp_path_list.encode('utf-8')
     nsp_path_list_len = len(nsp_path_list_bytes)
