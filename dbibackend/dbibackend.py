@@ -120,6 +120,9 @@ def poll_commands(context, work_dir_path):
             cmd_cache = process_list_command(context, work_dir_path)
         elif cmd_id == CMD_ID_FILE_RANGE:
             process_file_range_command(data_size, context=context, cache=cmd_cache)
+        else:
+            log.warning(f'Unknown command id: {cmd_id}')
+            process_exit_command(context)
 
 
 def process_exit_command(context):
