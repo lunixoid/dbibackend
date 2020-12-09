@@ -7,6 +7,7 @@ import time
 import argparse
 import logging
 import os
+from enum import IntEnum
 from collections import OrderedDict
 from pathlib import Path
 
@@ -15,15 +16,20 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.INFO)
 
-CMD_ID_EXIT = 0
-CMD_ID_LIST = 1
-CMD_ID_FILE_RANGE = 2
-
-CMD_TYPE_REQUEST = 0
-CMD_TYPE_RESPONSE = 1
-CMD_TYPE_ACK = 2
-
 BUFFER_SEGMENT_DATA_SIZE = 0x100000
+
+
+class CommandID(IntEnum):
+    EXIT = 0
+    LIST_DEPRECATED = 1
+    FILE_RANGE = 2
+    LIST = 3
+
+
+class CommandType(IntEnum):
+    REQUEST = 0
+    RESPONSE = 1
+    ACK = 2
 
 
 class UsbContext:
@@ -59,7 +65,7 @@ class UsbContext:
 
 def process_file_range_command(data_size, context, cache=None):
     log.info('File range')
-    context.write(struct.pack('<4sIII', b'DBI0', CMD_TYPE_ACK, CMD_ID_FILE_RANGE, data_size))
+    context.write(struct.pack('<4sIII', b'DBI0', CommandType.ACK, CommandID.FILE_RANGE, data_size))
     file_range_header = context.read(data_size)
     range_size = struct.unpack('<I', file_range_header[:4])[0]
     range_offset = struct.unpack('<Q', file_range_header[4:12])[0]
@@ -71,7 +77,7 @@ def process_file_range_command(data_size, context, cache=None):
 
     log.info(f'Range Size: {range_size}, Range Offset: {range_offset}, Name len: {nsp_name_len}, Name: {nsp_name}')
 
-    response_bytes = struct.pack('<4sIII', b'DBI0', CMD_TYPE_RESPONSE, CMD_ID_FILE_RANGE, range_size)
+    response_bytes = struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.FILE_RANGE, range_size)
     context.write(response_bytes)
 
     ack = bytes(context.read(16, timeout=0))
@@ -97,37 +103,9 @@ def process_file_range_command(data_size, context, cache=None):
             curr_off += read_size
 
 
-def poll_commands(context, work_dir_path):
-    log.info('Entering command loop')
-
-    cmd_cache = None
-    while True:
-        cmd_header = bytes(context.read(16, timeout=0))
-        magic = cmd_header[:4]
-
-        if magic != b'DBI0':  # Tinfoil USB Command 0
-            continue
-
-        cmd_type = struct.unpack('<I', cmd_header[4:8])[0]
-        cmd_id = struct.unpack('<I', cmd_header[8:12])[0]
-        data_size = struct.unpack('<I', cmd_header[12:16])[0]
-
-        log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
-
-        if cmd_id == CMD_ID_EXIT:
-            process_exit_command(context)
-        elif cmd_id == CMD_ID_LIST:
-            cmd_cache = process_list_command(context, work_dir_path)
-        elif cmd_id == CMD_ID_FILE_RANGE:
-            process_file_range_command(data_size, context=context, cache=cmd_cache)
-        else:
-            log.warning(f'Unknown command id: {cmd_id}')
-            process_exit_command(context)
-
-
 def process_exit_command(context):
     log.info('Exit')
-    context.write(struct.pack('<4sIII', b'DBI0', CMD_TYPE_RESPONSE, CMD_ID_EXIT, 0))
+    context.write(struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.EXIT, 0))
     sys.exit(0)
 
 
@@ -148,7 +126,7 @@ def process_list_command(context, work_dir_path):
     nsp_path_list_bytes = nsp_path_list.encode('utf-8')
     nsp_path_list_len = len(nsp_path_list_bytes)
 
-    context.write(struct.pack('<4sIII', b'DBI0', CMD_TYPE_RESPONSE, CMD_ID_LIST, nsp_path_list_len))
+    context.write(struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.LIST, nsp_path_list_len))
 
     ack = bytes(context.read(16, timeout=0))
     cmd_type = struct.unpack('<I', ack[4:8])[0]
@@ -159,6 +137,34 @@ def process_list_command(context, work_dir_path):
 
     context.write(nsp_path_list_bytes)
     return cached_titles
+
+
+def poll_commands(context, work_dir_path):
+    log.info('Entering command loop')
+
+    cmd_cache = None
+    while True:
+        cmd_header = bytes(context.read(16, timeout=0))
+        magic = cmd_header[:4]
+
+        if magic != b'DBI0':  # Tinfoil USB Command 0
+            continue
+
+        cmd_type = struct.unpack('<I', cmd_header[4:8])[0]
+        cmd_id = struct.unpack('<I', cmd_header[8:12])[0]
+        data_size = struct.unpack('<I', cmd_header[12:16])[0]
+
+        log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
+
+        if cmd_id == CommandID.EXIT:
+            process_exit_command(context)
+        elif cmd_id == CommandID.LIST:
+            cmd_cache = process_list_command(context, work_dir_path)
+        elif cmd_id == CommandID.FILE_RANGE:
+            process_file_range_command(data_size, context=context, cache=cmd_cache)
+        else:
+            log.warning(f'Unknown command id: {cmd_id}')
+            process_exit_command(context)
 
 
 def connect_to_switch():

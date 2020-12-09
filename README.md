@@ -12,7 +12,7 @@ Host:
 - python3.7+
 
 Nintendo Switch:
-- DBI v138+
+- DBI v202+
 
 Usage
 -----
