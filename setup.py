@@ -20,7 +20,7 @@ setup(
             ]
     },
     install_requires=[
-        'pyusb',
-        'usb'
+        'pyusb==1.1.0',
+        'usb==0.0.83.dev0'
     ]
 )
