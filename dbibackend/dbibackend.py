@@ -111,12 +111,13 @@ def process_exit_command(context):
 
 def process_list_command(context, work_dir_path):
     log.info('Get list')
+    compatible_extensions = ['.nsp', '.nsz', '.xci', '.xcz']
 
     cached_titles = OrderedDict()
     for dirName, subdirList, fileList in os.walk(work_dir_path):
         log.debug(f'Found directory: {dirName}')
         for filename in fileList:
-            if filename.lower().endswith('.nsp', 'nsz', '.xci', 'xcz'):
+            if filename.lower().endswith(tuple(compatible_extensions)):
                 log.debug(f'\t{filename}')
                 cached_titles[f'{filename}'] = str(Path(dirName).joinpath(filename))
 
