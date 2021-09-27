@@ -69,13 +69,13 @@ def process_file_range_command(data_size, context, cache=None):
     file_range_header = context.read(data_size)
     range_size = struct.unpack('<I', file_range_header[:4])[0]
     range_offset = struct.unpack('<Q', file_range_header[4:12])[0]
-    nsp_name_len = struct.unpack('<I', file_range_header[12:16])[0]
-    nsp_name = bytes(file_range_header[16:]).decode('utf-8')
+    title_name_len = struct.unpack('<I', file_range_header[12:16])[0]
+    title_name = bytes(file_range_header[16:]).decode('utf-8')
     if cache is not None and len(cache) > 0:
-        if nsp_name in cache:
-            nsp_name = cache[nsp_name]
+        if title_name in cache:
+            title_name = cache[title_name]
 
-    log.info(f'Range Size: {range_size}, Range Offset: {range_offset}, Name len: {nsp_name_len}, Name: {nsp_name}')
+    log.info(f'Range Size: {range_size}, Range Offset: {range_offset}, Name len: {title_name_len}, Name: {title_name}')
 
     response_bytes = struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.FILE_RANGE, range_size)
     context.write(response_bytes)
@@ -87,7 +87,7 @@ def process_file_range_command(data_size, context, cache=None):
     log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
     log.debug('Ack')
 
-    with open(nsp_name, 'rb') as f:
+    with open(title_name, 'rb') as f:
         f.seek(range_offset)
 
         curr_off = 0x0
@@ -116,17 +116,17 @@ def process_list_command(context, work_dir_path):
     for dirName, subdirList, fileList in os.walk(work_dir_path):
         log.debug(f'Found directory: {dirName}')
         for filename in fileList:
-            if filename.lower().endswith('.nsp') or filename.lower().endswith('nsz'):
+            if filename.lower().endswith('.nsp', 'nsz', '.xci', 'xcz'):
                 log.debug(f'\t{filename}')
                 cached_titles[f'{filename}'] = str(Path(dirName).joinpath(filename))
 
-    nsp_path_list = ''
+    title_path_list = ''
     for title in cached_titles.keys():
-        nsp_path_list += f'{title}\n'
-    nsp_path_list_bytes = nsp_path_list.encode('utf-8')
-    nsp_path_list_len = len(nsp_path_list_bytes)
+        title_path_list += f'{title}\n'
+    title_path_list_bytes = title_path_list.encode('utf-8')
+    title_path_list_len = len(title_path_list_bytes)
 
-    context.write(struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.LIST, nsp_path_list_len))
+    context.write(struct.pack('<4sIII', b'DBI0', CommandType.RESPONSE, CommandID.LIST, title_path_list_len))
 
     ack = bytes(context.read(16, timeout=0))
     cmd_type = struct.unpack('<I', ack[4:8])[0]
@@ -135,7 +135,7 @@ def process_list_command(context, work_dir_path):
     log.debug(f'Cmd Type: {cmd_type}, Command id: {cmd_id}, Data size: {data_size}')
     log.debug('Ack')
 
-    context.write(nsp_path_list_bytes)
+    context.write(title_path_list_bytes)
     return cached_titles
 
 
