@@ -38,7 +38,6 @@ class UsbContext:
         if dev is None:
             raise ConnectionError(f'Device {vid}:{pid} not found')
 
-        dev.reset()
         dev.set_configuration()
         cfg = dev.get_active_configuration()
 
