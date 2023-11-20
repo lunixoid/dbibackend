@@ -116,7 +116,7 @@ def process_list_command(context, work_dir_path):
     for dirName, subdirList, fileList in os.walk(work_dir_path):
         log.debug(f'Found directory: {dirName}')
         for filename in fileList:
-            if filename.lower().endswith('.nsp') or filename.lower().endswith('nsz'):
+            if filename.lower().endswith('.nsp') or filename.lower().endswith('nsz') or filename.lower().endswith('.xci'):
                 log.debug(f'\t{filename}')
                 cached_titles[f'{filename}'] = str(Path(dirName).joinpath(filename))
 
